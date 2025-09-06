@@ -1,0 +1,46 @@
+# wrangler.toml
+name = "telegram-chat-worker"
+main = "worker.js"
+compatibility_date = "2025-09-06"
+
+# 环境变量
+[vars]
+ENCRYPTION_KEY = "32byteslongencryptionkey12345678"  # 32字节加密密钥
+ADMIN_USERNAME = "xiyue"
+
+# 兼容性标志
+[compatibility_flags]
+web_socket = true
+
+# 限制配置
+[limits]
+cpu_ms = 50
+
+# 开发配置
+[dev]
+ip = "0.0.0.0"
+port = 8787
+local_protocol = "http"
+
+# 部署配置
+[deploy]
+triggers = [
+  "deploy"
+]
+
+# 环境特定配置
+[env.production]
+name = "telegram-chat-worker-prod"
+route = "your-domain.com/*"
+kv_namespaces = [
+  { binding = "QDATA", id = "your-production-kv-id" }
+]
+vars = { ENCRYPTION_KEY = "your-production-encryption-key", ADMIN_USERNAME = "xiyue" }
+
+[env.staging]
+name = "telegram-chat-worker-staging"
+route = "staging.your-domain.com/*"
+kv_namespaces = [
+  { binding = "QDATA", id = "your-staging-kv-id" }
+]
+vars = { ENCRYPTION_KEY = "your-staging-encryption-key", ADMIN_USERNAME = "xiyue" }
