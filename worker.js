@@ -1,6 +1,6 @@
-// worker.js - Telegram风格聊天应用（Cloudflare Workers版）- 修复版
+// worker.js - 修复版本（最终版）
 // 总行数：约2980行
-// 功能：完整聊天系统、加密存储、管理员面板、等级系统、安全防护
+// 修复了 const 变量重新赋值的问题
 
 // ========== 基础配置与工具类 ==========
 const APP_NAME = "TeleChat";
@@ -79,7 +79,7 @@ class CryptoUtils {
       };
     } catch (e) {
       console.error("加密失败:", e);
-      return {iv: [], data: []};
+      return {iv: [],  []};
     }
   }
 
@@ -342,12 +342,13 @@ class KVStore {
 
   static async saveAuditRecord(record) {
     try {
-      const records = await this.getAuditRecords();
+      // 获取现有记录
+      let records = await this.getAuditRecords();
       records.push(record);
       
-      // 只保留最近1000条记录
+      // 只保留最近1000条记录（修复const重新赋值问题）
       if (records.length > 1000) {
-        records = records.slice(-1000);
+        records = records.slice(-1000); // 这里创建新数组，不是修改原数组
       }
       
       const encryptedData = await CryptoUtils.encrypt(JSON.stringify(records));
