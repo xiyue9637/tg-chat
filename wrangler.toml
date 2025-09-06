@@ -1,4 +1,4 @@
-# wrangler.toml
+# wrangler.toml - 修复版本
 name = "telegram-chat-worker"
 main = "worker.js"
 compatibility_date = "2025-09-06"
@@ -8,9 +8,8 @@ compatibility_date = "2025-09-06"
 ENCRYPTION_KEY = "32byteslongencryptionkey12345678"  # 32字节加密密钥
 ADMIN_USERNAME = "xiyue"
 
-# 兼容性标志
-[compatibility_flags]
-web_socket = true
+# 兼容性标志 - 修正格式：必须是字符串数组
+compatibility_flags = ["web_socket"]
 
 # 限制配置
 [limits]
@@ -22,25 +21,24 @@ ip = "0.0.0.0"
 port = 8787
 local_protocol = "http"
 
-# 部署配置
-[deploy]
-triggers = [
-  "deploy"
-]
+# 注意：移除了无效的 [deploy] 部分
+# Wrangler 4.x 不再支持 [deploy] 配置段
 
-# 环境特定配置
-[env.production]
-name = "telegram-chat-worker-prod"
-route = "your-domain.com/*"
-kv_namespaces = [
-  { binding = "QDATA", id = "your-production-kv-id" }
-]
-vars = { ENCRYPTION_KEY = "your-production-encryption-key", ADMIN_USERNAME = "xiyue" }
+# 如果需要多环境配置，请使用以下格式：
+# [env.production]
+# name = "telegram-chat-worker-prod"
+# route = "your-domain.com/*"
+# kv_namespaces = [
+#   { binding = "QDATA", id = "" }  # 填写生产环境KV ID
+# ]
+# vars = { ENCRYPTION_KEY = "your-production-encryption-key", ADMIN_USERNAME = "xiyue" }
+# compatibility_flags = ["web_socket"]
 
-[env.staging]
-name = "telegram-chat-worker-staging"
-route = "staging.your-domain.com/*"
-kv_namespaces = [
-  { binding = "QDATA", id = "your-staging-kv-id" }
-]
-vars = { ENCRYPTION_KEY = "your-staging-encryption-key", ADMIN_USERNAME = "xiyue" }
+# [env.staging]
+# name = "telegram-chat-worker-staging"
+# route = "staging.your-domain.com/*"
+# kv_namespaces = [
+#   { binding = "QDATA", id = "" }  # 填写测试环境KV ID
+# ]
+# vars = { ENCRYPTION_KEY = "your-staging-encryption-key", ADMIN_USERNAME = "xiyue" }
+# compatibility_flags = ["web_socket"]

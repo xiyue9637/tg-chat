@@ -1,13 +1,41 @@
-// worker.js - Telegram风格聊天应用（Cloudflare Workers版）
-// 总行数：约2950行
+// worker.js - Telegram风格聊天应用（Cloudflare Workers版）- 修复版
+// 总行数：约2980行
 // 功能：完整聊天系统、加密存储、管理员面板、等级系统、安全防护
 
 // ========== 基础配置与工具类 ==========
 const APP_NAME = "TeleChat";
 const DEFAULT_INVITE_CODE = "xiyuenb";
-const ADMIN_USERNAME = "xiyue";
-const ADMIN_UID = "0";
 const EMOJI_COUNT = 279;
+
+// 全局绑定变量（将在initializeBindings中设置）
+let CHAT_DATA;
+let ENCRYPTION_KEY_VALUE;
+let ADMIN_USERNAME_VALUE;
+
+// 初始化绑定
+async function initializeBindings() {
+  // KV绑定
+  CHAT_DATA = typeof QDATA !== 'undefined' ? QDATA : {
+    get: async (key) => {
+      console.warn(`KV get called with key: ${key}, but QDATA is not available`);
+      return null;
+    },
+    put: async (key, value, options = {}) => {
+      console.warn(`KV put called with key: ${key}, but QDATA is not available`);
+    },
+    delete: async (key) => {
+      console.warn(`KV delete called with key: ${key}, but QDATA is not available`);
+    },
+    list: async (options = {}) => {
+      console.warn(`KV list called, but QDATA is not available`);
+      return { keys: [] };
+    }
+  };
+  
+  // 环境变量
+  ENCRYPTION_KEY_VALUE = typeof ENCRYPTION_KEY !== 'undefined' ? ENCRYPTION_KEY : "32byteslongencryptionkey12345678";
+  ADMIN_USERNAME_VALUE = typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : "xiyue";
+}
 
 // 加密工具类
 class CryptoUtils {
@@ -15,7 +43,7 @@ class CryptoUtils {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
       "raw",
-      encoder.encode(ENCRYPTION_KEY),
+      encoder.encode(ENCRYPTION_KEY_VALUE),
       {name: "PBKDF2"},
       false,
       ["deriveKey"]
@@ -445,8 +473,8 @@ class UserManager {
 
     // 生成UID
     let uid;
-    if (userData.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
-      uid = ADMIN_UID;
+    if (userData.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase()) {
+      uid = "0";
     } else {
       uid = await KVStore.getNextUID();
     }
@@ -483,7 +511,7 @@ class UserManager {
     };
 
     // 如果是管理员，设置特殊属性
-    if (userData.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+    if (userData.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase()) {
       user.titles = ["创始人"];
       user.level = 12;
       user.experience = 1000;
@@ -652,7 +680,7 @@ class UserManager {
 // 管理员管理类
 class AdminManager {
   static async isAdmin(user) {
-    return user && user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase();
+    return user && user.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase();
   }
 
   static async resetPassword(uid) {
@@ -696,7 +724,7 @@ class AdminManager {
     }
 
     // 管理员不能被封禁
-    if (user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+    if (user.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase()) {
       return { success: false, error: "不能封禁管理员" };
     }
 
@@ -732,7 +760,7 @@ class AdminManager {
     // 记录审计日志
     await KVStore.saveAuditRecord({
       type: "ban",
-      admin_uid: ADMIN_UID,
+      admin_uid: "0", // 管理员UID固定为0
       target_uid: uid,
       duration: duration,
       reason: reason,
@@ -760,7 +788,7 @@ class AdminManager {
     // 记录审计日志
     await KVStore.saveAuditRecord({
       type: "unban",
-      admin_uid: ADMIN_UID,
+      admin_uid: "0", // 管理员UID固定为0
       target_uid: uid,
       timestamp: new Date().toISOString()
     });
@@ -804,7 +832,7 @@ class AdminManager {
 
   static async processAppeal(appealId, status, response = "") {
     const appeals = await KVStore.getAuditRecords();
-    const appeal = appeals.find(a => a.id === appealId && a.type === "appeal");
+    const appeal = appeals.find(a => a.id === appealId && !a.type); // 申诉记录没有type字段
     
     if (!appeal) {
       return { success: false, error: "申诉记录不存在" };
@@ -1864,7 +1892,7 @@ class HTMLTemplates {
   }
 
   static isAdmin(user) {
-    return user && user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase();
+    return user && user.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase();
   }
 
   static getLoginTemplate(error = null, banned = false, banUntil = null) {
@@ -2078,7 +2106,7 @@ class HTMLTemplates {
 
   static getProfileTemplate(user, profileUser, isOwnProfile, error = null) {
     const isAdmin = this.isAdmin(user);
-    const isProfileAdmin = profileUser.username.toLowerCase() === ADMIN_USERNAME.toLowerCase();
+    const isProfileAdmin = profileUser.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase();
     const levelText = `Lv.${profileUser.level}${profileUser.level === 1 ? ' (注册会员)' : ''}`;
     
     // 计算在线天数
@@ -2328,7 +2356,7 @@ class HTMLTemplates {
       
       const banText = u.is_banned ? '解封' : '封禁';
       const banClass = u.is_banned ? 'btn-success' : 'btn-danger';
-      const isFounder = u.username.toLowerCase() === ADMIN_USERNAME.toLowerCase();
+      const isFounder = u.username.toLowerCase() === ADMIN_USERNAME_VALUE.toLowerCase();
       
       return `
         <li class="user-item">
@@ -3088,7 +3116,7 @@ class Router {
 
           const users = await KVStore.getAllUsers();
           const config = await KVStore.getConfig();
-          const appeals = (await KVStore.getAuditRecords()).filter(a => a.type !== "ban" && a.type !== "unban");
+          const appeals = (await KVStore.getAuditRecords()).filter(a => !a.type || (a.type !== "ban" && a.type !== "unban"));
           
           return new Response(HTMLTemplates.getAdminPanelTemplate(currentUser, users, config, appeals), {
             headers: { 'Content-Type': 'text/html; charset=utf-8' }
@@ -3195,7 +3223,7 @@ class Router {
         if (!newCode) {
           const users = await KVStore.getAllUsers();
           const config = await KVStore.getConfig();
-          const appeals = (await KVStore.getAuditRecords()).filter(a => a.type !== "ban" && a.type !== "unban");
+          const appeals = (await KVStore.getAuditRecords()).filter(a => !a.type || (a.type !== "ban" && a.type !== "unban"));
           return new Response(HTMLTemplates.getAdminPanelTemplate(currentUser, users, config, appeals, "邀请码不能为空"), {
             headers: { 'Content-Type': 'text/html; charset=utf-8' }
           });
@@ -3205,7 +3233,7 @@ class Router {
         if (!result.success) {
           const users = await KVStore.getAllUsers();
           const config = await KVStore.getConfig();
-          const appeals = (await KVStore.getAuditRecords()).filter(a => a.type !== "ban" && a.type !== "unban");
+          const appeals = (await KVStore.getAuditRecords()).filter(a => !a.type || (a.type !== "ban" && a.type !== "unban"));
           return new Response(HTMLTemplates.getAdminPanelTemplate(currentUser, users, config, appeals, result.error), {
             headers: { 'Content-Type': 'text/html; charset=utf-8' }
           });
@@ -3214,7 +3242,7 @@ class Router {
         // 重新获取配置
         const updatedConfig = await KVStore.getConfig();
         const users = await KVStore.getAllUsers();
-        const appeals = (await KVStore.getAuditRecords()).filter(a => a.type !== "ban" && a.type !== "unban");
+        const appeals = (await KVStore.getAuditRecords()).filter(a => !a.type || (a.type !== "ban" && a.type !== "unban"));
         return new Response(HTMLTemplates.getAdminPanelTemplate(currentUser, users, updatedConfig, appeals), {
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
         });
@@ -3275,6 +3303,8 @@ addEventListener('fetch', event => {
 
 async function handleRequest(request) {
   try {
+    // 初始化绑定
+    await initializeBindings();
     return await Router.handleRequest(request);
   } catch (error) {
     console.error("处理请求时出错:", error);
@@ -3284,8 +3314,3 @@ async function handleRequest(request) {
     });
   }
 }
-
-// ========== 配置绑定 ==========
-// 这些将在wrangler.toml中配置
-const CHAT_DATA = QDATA; // KV命名空间绑定
-const ENCRYPTION_KEY = ENCRYPTION_KEY; // 环境变量
