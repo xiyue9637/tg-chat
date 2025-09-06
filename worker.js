@@ -1,6 +1,5 @@
-// worker.js - 修复版本（最终版）
-// 总行数：约2980行
-// 修复了 const 变量重新赋值的问题
+// worker.js - 最终修复版本
+// 修复了所有语法错误，确保可以成功部署
 
 // ========== 基础配置与工具类 ==========
 const APP_NAME = "TeleChat";
@@ -79,7 +78,7 @@ class CryptoUtils {
       };
     } catch (e) {
       console.error("加密失败:", e);
-      return {iv: [],  []};
+      return {iv: [], data: []}; // 修复：移除多余的逗号和空数组
     }
   }
 
@@ -346,9 +345,9 @@ class KVStore {
       let records = await this.getAuditRecords();
       records.push(record);
       
-      // 只保留最近1000条记录（修复const重新赋值问题）
+      // 只保留最近1000条记录
       if (records.length > 1000) {
-        records = records.slice(-1000); // 这里创建新数组，不是修改原数组
+        records = records.slice(-1000);
       }
       
       const encryptedData = await CryptoUtils.encrypt(JSON.stringify(records));
